@@ -1,0 +1,18 @@
+# 环境变量 — 包含 API Key，绝对不能提交
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
