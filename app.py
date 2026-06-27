@@ -10,7 +10,7 @@ st.set_page_config(
     menu_items={
         "Get Help": None,
         "Report a bug": None,
-        "About": "知识迁移桥梁 v1.0 — 基于认知科学类比推理的跨领域学习工具",
+        "About": "知识迁移桥梁 v2.0 — 基于认知科学类比推理的跨领域学习工具",
     },
 )
 
@@ -189,7 +189,7 @@ with st.sidebar:
         防止过度类比导致的认知偏差。
         """
     )
-    st.caption("v1.0 — AI 课程原型")
+    st.caption("v2.0 — AI 课程原型")
 
     st.divider()
     if st.button("刷新页面", use_container_width=True):
@@ -248,6 +248,7 @@ if st.session_state.running and st.session_state.source_domain:
 
     st.subheader("第二步：知识迁移进行中")
     progress_bar = st.progress(0, text="准备启动...")
+    status_area = st.empty()  # 动态刷新区域
 
     stage_labels = {
         1: "阶段 1/4：提取「{}」核心概念图谱".format(st.session_state.source_domain),
@@ -257,24 +258,68 @@ if st.session_state.running and st.session_state.source_domain:
     }
 
     all_results = {}
+    all_meta = {}
     error_occurred = False
+    warnings_list = []
 
     try:
-        for stage, content in bridge.run(
+        for stage, content, meta in bridge.run(
             st.session_state.source_domain, st.session_state.target_domain
         ):
             all_results[stage] = content
+            all_meta[stage] = meta
             progress_bar.progress(stage * 25, text=stage_labels[stage])
+
+            # ── 实时状态提示 ──
+            status_msg = ""
+            if meta.get("cached"):
+                status_msg += " ⚡缓存命中"
+            if meta.get("retry_count", 0) > 0:
+                status_msg += f" 🔄重试{meta['retry_count']}次"
+            if meta.get("issues"):
+                for iss in meta["issues"]:
+                    warnings_list.append(f"阶段{stage}: {iss}")
+
+            if status_msg and stage <= 2:
+                status_area.info(
+                    f"阶段 1+2 并行耗时 {meta.get('parallel_elapsed_s', '?')}s"
+                    + status_msg
+                )
+
     except Exception as e:
-        st.error(f"流水线执行出错: {e}")
+        st.error(f"流水线严重错误: {e}")
         error_occurred = True
     finally:
         st.session_state.results = all_results
+        st.session_state.meta = all_meta
         st.session_state.running = False
 
-    if not error_occurred and all_results:
-        progress_bar.progress(100, text="知识迁移完成！")
+    progress_bar.progress(100, text="知识迁移完成！")
+
+    # ── 汇总提示 ──
+    stats = bridge.get_stats()
+    total_cached = stats["cache_hits"]
+    total_retries = sum(
+        m.get("retry_count", 0) for m in all_meta.values()
+    )
+
+    if error_occurred:
+        st.error("部分阶段执行出现问题，请查看下方详情。")
+    elif total_cached > 0:
+        st.success(
+            f"知识迁移完成！⚡ 缓存命中 {total_cached} 次，"
+            f"节省了 API 调用。"
+        )
+    else:
         st.success("四阶段知识迁移已完成，请在下方查看结果。")
+
+    # ── 告警汇总 ──
+    if warnings_list:
+        with st.expander(f"检测到 {len(warnings_list)} 个格式问题（已自动修复）", expanded=False):
+            for w in warnings_list:
+                st.warning(w)
+    if total_retries > 0:
+        st.info(f"本次运行共触发 {total_retries} 次自动重试。")
 
 # ---- results display + export ----
 results = st.session_state.results
