@@ -192,6 +192,39 @@ class KnowledgeBridge:
         self.meta_log[4] = r4
         yield 4, r4["content"], r4
 
+    # ── 交互式追问 ──
+    def follow_up(self, mappings_text: str, question: str) -> str:
+        """对已生成的类比映射进行追问，要求 LLM 换个角度或深入解释。
+
+        Args:
+            mappings_text: Stage 3 的完整输出
+            question: 用户的追问（如"换个角度解释火候→训练过程"）
+        Returns:
+            LLM 的追问回答文本
+        """
+        system = (
+            "你是一位耐心且善于沟通的认知科学老师。"
+            "用户已经看过了下面的跨领域知识迁移（类比映射），但对某个具体类比还有疑问。\n\n"
+            "## 你的任务\n"
+            "根据用户的问题，对相关类比进行更深入的解释。\n"
+            "你可以：\n"
+            "1. 换一个生活化的场景重新解释这个类比\n"
+            "2. 补充更多结构对应关系的细节\n"
+            "3. 重点解释用户困惑的那部分\n\n"
+            "## 原则\n"
+            "- 优先使用源领域的语言，而非目标领域的术语\n"
+            "- 如果用户的类比确实存在边界限制，要诚实指出\n"
+            "- 回答精炼，控制在 300 字以内\n"
+            "- 全文使用中文\n\n"
+            "## 已生成的类比映射\n"
+            f"{mappings_text}"
+        )
+        user_msg = f"我对以下内容有疑问：{question}"
+        try:
+            return self.llm.chat(system, user_msg, temperature=0.6)
+        except Exception as e:
+            return f"[追问失败] {e}"
+
     def get_stats(self) -> Dict[str, Any]:
         return {
             "cache_hits": _cache_stats["hits"],
